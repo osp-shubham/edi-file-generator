@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EdiGeneratorService } from '../../services/edi-generator.service';
 import { MonacoEditorModule, EditorComponent } from 'ngx-monaco-editor-v2';
+import { ThemeService } from '../../services/theme.service';
 
 interface ParsedSegment {
   segmentId: string;
@@ -86,7 +87,21 @@ export class EdiVisualizerComponent {
 
   private parseTimeout: any;
 
-  constructor(private ediGeneratorService: EdiGeneratorService) {
+  constructor(
+    private ediGeneratorService: EdiGeneratorService,
+    private themeService: ThemeService
+  ) {
+    // Sync Monaco editor theme with app theme
+    effect(() => {
+      const isDark = this.themeService.isDarkMode();
+      const newTheme = isDark ? 'vs-dark' : 'vs';
+      this.editorTheme.set(newTheme);
+      this.editorOptions.set({
+        ...this.editorOptions(),
+        theme: newTheme
+      });
+    });
+
     // Auto-parse as user types (debounced)
     effect(() => {
       const input = this.ediInput();

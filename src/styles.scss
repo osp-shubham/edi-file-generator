@@ -2,3 +2,211 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Dark mode styles - Softer, easier on the eyes */
+.dark {
+  background-color: #1e1e1e;
+  color: #d4d4d4;
+}
+
+.dark .bg-gray-100 {
+  background-color: #252526 !important;
+}
+
+.dark .bg-white {
+  background-color: #2d2d30 !important;
+  color: #cccccc !important;
+}
+
+.dark .bg-gray-50 {
+  background-color: #252526 !important;
+}
+
+.dark .text-gray-900 {
+  color: #cccccc !important;
+}
+
+.dark .text-gray-700 {
+  color: #b3b3b3 !important;
+}
+
+.dark .text-gray-600 {
+  color: #9d9d9d !important;
+}
+
+.dark .text-blue-600 {
+  color: #569cd6 !important;
+}
+
+.dark .border-gray-200 {
+  border-color: #3e3e42 !important;
+}
+
+.dark .border-gray-300 {
+  border-color: #474747 !important;
+}
+
+.dark textarea,
+.dark input,
+.dark select {
+  background-color: #3c3c3c !important;
+  color: #cccccc !important;
+  border-color: #474747 !important;
+}
+
+.dark textarea::placeholder,
+.dark input::placeholder {
+  color: #858585 !important;
+}
+
+.dark .bg-gradient-to-r {
+  background: linear-gradient(to right, #2d2d30, #3c3c3c) !important;
+}
+
+.dark .shadow-sm {
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.3) !important;
+}
+
+.dark .shadow-md {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Buttons in dark mode */
+.dark button {
+  border-color: #474747;
+}
+
+.dark .bg-blue-600 {
+  background-color: #0e639c !important;
+}
+
+.dark .hover\:bg-blue-500:hover {
+  background-color: #1177bb !important;
+}
+
+.dark .bg-gray-200 {
+  background-color: #3c3c3c !important;
+}
+
+.dark .hover\:bg-gray-300:hover {
+  background-color: #505050 !important;
+}
+
+.dark .hover\:bg-gray-200:hover {
+  background-color: #404040 !important;
+}
+
+.dark .bg-red-600 {
+  background-color: #c72e2e !important;
+}
+
+.dark .hover\:bg-red-700:hover {
+  background-color: #a82828 !important;
+}
+
+.dark .bg-green-600 {
+  background-color: #107c10 !important;
+}
+
+.dark .hover\:bg-green-700:hover {
+  background-color: #0e6b0e !important;
+}
+
+/* Card headers */
+.dark .from-blue-50,
+.dark .from-indigo-50 {
+  background: #2d2d30 !important;
+}
+
+.dark .to-blue-100,
+.dark .to-indigo-100 {
+  background: #3c3c3c !important;
+}
+
+.dark .text-blue-700,
+.dark .text-indigo-700 {
+  color: #569cd6 !important;
+}
+
+.dark .border-blue-200,
+.dark .border-indigo-200 {
+  border-color: #3e3e42 !important;
+}
+
+/* Specific text colors for dark mode */
+.dark .text-slate-700 {
+  color: #b3b3b3 !important;
+}
+
+.dark .text-gray-800 {
+  color: #cccccc !important;
+}
+
+.dark .text-green-700 {
+  color: #7cb668 !important;
+}
+
+.dark .text-green-800 {
+  color: #8cc570 !important;
+}
+
+.dark .text-blue-700 {
+  color: #6eb5e0 !important;
+}
+
+.dark .text-blue-800 {
+  color: #79c0f0 !important;
+}
+
+.dark .text-purple-700 {
+  color: #b392f0 !important;
+}
+
+.dark .text-purple-800 {
+  color: #c8a5f5 !important;
+}
+
+.dark .text-red-700 {
+  color: #f48771 !important;
+}
+
+.dark .text-red-800 {
+  color: #ff9580 !important;
+}
+
+/* Background colors for cards in dark mode */
+.dark .bg-green-50 {
+  background-color: #1a3a1a !important;
+}
+
+.dark .bg-blue-50 {
+  background-color: #1a2a3a !important;
+}
+
+.dark .bg-purple-50 {
+  background-color: #2a1a3a !important;
+}
+
+.dark .bg-red-50 {
+  background-color: #3a1a1a !important;
+}
+
+.dark .border-green-200 {
+  border-color: #2d5a2d !important;
+}
+
+.dark .border-blue-200 {
+  border-color: #2d4a5a !important;
+}
+
+.dark .border-purple-200 {
+  border-color: #4a2d5a !important;
+}
+
+.dark .border-red-200 {
+  border-color: #5a2d2d !important;
+}
+
+.dark .border-red-300 {
+  border-color: #6a3d3d !important;
+}
