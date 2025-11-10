@@ -22,7 +22,9 @@ export class EdiGeneratorComponent implements OnInit, OnDestroy {
 
   // Collapse/Expand state management
   sectionsExpanded: { [key: string]: boolean } = {
-    transaction: true,
+    transaction: false,
+    payment: false,
+    submitter: false,
     payer: true,
     patient: true,
     provider: true,
@@ -36,9 +38,6 @@ export class EdiGeneratorComponent implements OnInit, OnDestroy {
     private ediGeneratorService: EdiGeneratorService
   ) {
     this.ediFormGroup = this.buildEdiForm();
-    this.sectionsExpanded = {
-      transaction: false,
-    };
   }
 
   toggleSection(section: string): void {
@@ -159,12 +158,33 @@ export class EdiGeneratorComponent implements OnInit, OnDestroy {
       transactionType: this.fb.control('835'),
       delimiter: this.fb.control('*~'),
 
+      payment: this.buildPayment(),
+      submitter: this.buildSubmitter(),
       insurance: this.buildInsurance(),
       provider: this.buildProvider(),
       patient: this.buildPatient(),
 
       claims: this.fb.array([this.buildClaim()]),
       plb: this.buildPlb(),
+    });
+  }
+
+  private buildPayment() {
+    return this.fb.group({
+      checkAmount: [''], // Optional: Override calculated total
+      checkNumber: ['123456789012'],
+      depositDate: [new Date().toISOString().split('T')[0]], // Today's date in YYYY-MM-DD format
+    });
+  }
+
+  private buildSubmitter() {
+    return this.fb.group({
+      name: ['ABC Healthcare Billing Services'],
+      contactName: ['Jane Smith'],
+      phone: ['8005551234'],
+      email: ['billing@abchealthcare.com'],
+      npi: ['1234567890'],
+      taxId: ['12-3456789'],
     });
   }
 
@@ -397,7 +417,10 @@ export class EdiGeneratorComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    // remove \n from the content
+    const sanitizedContent = content.replace(/\n/g, '');
+
+    const blob = new Blob([sanitizedContent], { type: 'text/plain;charset=utf-8' });
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;

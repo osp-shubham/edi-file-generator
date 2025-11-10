@@ -41,6 +41,29 @@ describe('EdiGeneratorComponent', () => {
       expect(component.ediFormGroup.get('provider')).toBeDefined();
       expect(component.ediFormGroup.get('patient')).toBeDefined();
     });
+
+    it('should have payment group with default values', () => {
+      const payment = component.ediFormGroup.get('payment');
+      expect(payment).toBeDefined();
+      expect(payment?.get('checkNumber')?.value).toBe('123456789012');
+      expect(payment?.get('depositDate')?.value).toBeTruthy();
+    });
+
+    it('should have submitter group with pre-filled defaults', () => {
+      const submitter = component.ediFormGroup.get('submitter');
+      expect(submitter).toBeDefined();
+      expect(submitter?.get('name')?.value).toBe('ABC Healthcare Billing Services');
+      expect(submitter?.get('contactName')?.value).toBe('Jane Smith');
+      expect(submitter?.get('phone')?.value).toBe('8005551234');
+      expect(submitter?.get('email')?.value).toBe('billing@abchealthcare.com');
+      expect(submitter?.get('npi')?.value).toBe('1234567890');
+      expect(submitter?.get('taxId')?.value).toBe('12-3456789');
+    });
+
+    it('should have payment and submitter sections collapsed by default', () => {
+      expect(component.isSectionExpanded('payment')).toBe(false);
+      expect(component.isSectionExpanded('submitter')).toBe(false);
+    });
   });
 
   describe('Section Expansion', () => {

@@ -273,4 +273,119 @@ describe('EdiGeneratorService', () => {
       expect(result.errors.some(e => e.includes('Expected transaction type 835'))).toBe(true);
     });
   });
+
+  describe('Payment and Submitter Information', () => {
+    it('should use custom check number from payment form', () => {
+      const formData = {
+        delimiter: '*~',
+        payment: {
+          checkNumber: '999888777666',
+          depositDate: '2025-01-15'
+        },
+        insurance: { payerId: 'TEST001' },
+        provider: { npi: '1234567890' },
+        patient: {},
+        claims: [{ claimNumber: 'CLAIM001', payment: '100.00' }]
+      };
+
+      const result = service.generate835(formData);
+
+      expect(result).toContain('TRN*1*999888777666');
+      expect(result).toContain('20250115'); // Formatted deposit date
+    });
+
+    it('should include submitter information in 1000A loop', () => {
+      const formData = {
+        delimiter: '*~',
+        submitter: {
+          name: 'Test Billing Co',
+          contactName: 'Jane Doe',
+          phone: '8001234567',
+          email: 'billing@test.com',
+          npi: '9876543210',
+          taxId: '12-3456789'
+        },
+        insurance: { payerId: 'TEST001' },
+        provider: { npi: '1234567890' },
+        patient: {},
+        claims: [{ claimNumber: 'CLAIM001' }]
+      };
+
+      const result = service.generate835(formData);
+
+      expect(result).toContain('N1*41*Test Billing Co*46*9876543210');
+      expect(result).toContain('PER*IC*Jane Doe*TE*8001234567*EM*billing@test.com');
+    });
+
+    it('should use submitter tax ID in ISA segment', () => {
+      const formData = {
+        delimiter: '*~',
+        submitter: {
+          taxId: '98-7654321',
+          npi: '1234567890'
+        },
+        insurance: { payerId: 'PAYER123' },
+        provider: { npi: '1234567890' },
+        patient: {},
+        claims: []
+      };
+
+      const result = service.generate835(formData);
+
+      expect(result).toContain('ISA*00*          *00*          *ZZ*98-7654321');
+    });
+
+    it('should use submitter NPI in GS segment', () => {
+      const formData = {
+        delimiter: '*~',
+        submitter: {
+          npi: '9876543210',
+          taxId: '12-3456789'
+        },
+        insurance: { payerId: 'PAYER123' },
+        provider: { npi: '1234567890' },
+        patient: {},
+        claims: []
+      };
+
+      const result = service.generate835(formData);
+
+      expect(result).toContain('GS*HP*9876543210*PAYER123');
+    });
+  });
+
+  describe('Delimiter Format Support', () => {
+    it('should generate EDI with ~_ format correctly', () => {
+      const formData = {
+        delimiter: '~_',
+        insurance: { payerId: 'TEST001' },
+        provider: { npi: '1234567890' },
+        patient: {},
+        claims: [{ claimNumber: 'CLAIM001' }]
+      };
+
+      const result = service.generate835(formData);
+
+      expect(result).toContain('ISA~00~');
+      expect(result).toContain('GS~HP~');
+      expect(result).toContain('ST~835~');
+    });
+
+    it('should detect ~ as delimiter when _ is terminator', () => {
+      const ediContent = 'ISA~00~test_GS~HP~test_ST~835~0001_';
+      
+      const validation = service.validate835(ediContent);
+      
+      // Should recognize ~ as delimiter and _ as terminator
+      expect(validation.errors).not.toContain('Could not detect element delimiter');
+    });
+
+    it('should detect _ as segment terminator', () => {
+      const ediContent = 'ISA~00~test_GS~HP~test_ST~835~0001_BPR~test_SE~4_GE~1_IEA~1_';
+      
+      const validation = service.validate835(ediContent);
+      
+      expect(validation.errors).not.toContain('Could not detect segment terminator');
+    });
+  });
 });

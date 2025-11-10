@@ -8,8 +8,13 @@ export class EdiGeneratorService {
   constructor() { }
 
   generate835(formData: any): string {
-    const delimiter = formData.delimiter?.charAt(0) || '*';
-    const segmentTerminator = formData.delimiter?.charAt(1) || '~';
+    // Parse delimiter format: first char is element delimiter, second is segment terminator
+    // Examples: "*~" means * is delimiter and ~ is terminator (standard)
+    //           "~_" means ~ is delimiter and _ is terminator (alternative with line breaks)
+    const delimiterFormat = formData.delimiter || '*~';
+    const delimiter = delimiterFormat.charAt(0) || '*';
+    const segmentTerminator = delimiterFormat.charAt(1) || '~';
+    
     const currentDate = new Date();
     const interchangeControl = this.generateControlNumber(9);
     const groupControl = this.generateControlNumber(4);
@@ -18,11 +23,11 @@ export class EdiGeneratorService {
     let segmentCount = 0;
 
     // ISA - Interchange Control Header
-    segments.push(this.buildISA(delimiter, segmentTerminator, currentDate, interchangeControl));
+    segments.push(this.buildISA(delimiter, segmentTerminator, currentDate, interchangeControl, formData));
     segmentCount++;
 
     // GS - Functional Group Header (HP for 835)
-    segments.push(this.buildGS835(delimiter, segmentTerminator, currentDate, groupControl));
+    segments.push(this.buildGS835(delimiter, segmentTerminator, currentDate, groupControl, formData));
     segmentCount++;
 
     // ST - Transaction Set Header (835)
@@ -35,7 +40,7 @@ export class EdiGeneratorService {
     segmentCount++;
 
     // TRN - Reassociation Trace Number
-    segments.push(this.buildTRN(delimiter, segmentTerminator));
+    segments.push(this.buildTRN(delimiter, segmentTerminator, formData));
     segmentCount++;
 
     // REF - Receiver Identification
@@ -47,6 +52,14 @@ export class EdiGeneratorService {
     // DTM - Production Date
     segments.push(`DTM${delimiter}405${delimiter}${this.formatDateYYYYMMDD(currentDate)}${segmentTerminator}`);
     segmentCount++;
+
+    // 1000A Loop - Submitter Information (optional but recommended)
+    if (formData.submitter) {
+      const submitterSegments = this.buildSubmitterLoop(delimiter, segmentTerminator, formData.submitter);
+      segments.push(submitterSegments);
+      // Count segments: N1 (1) + optional PER (1)
+      segmentCount += formData.submitter.contactName || formData.submitter.phone || formData.submitter.email ? 2 : 1;
+    }
 
     // N1 Loop - Payer Identification
     segments.push(this.buildN1Loop(delimiter, segmentTerminator, 'PR', formData.insurance));
@@ -156,12 +169,24 @@ export class EdiGeneratorService {
     return segments.join('\n');
   }
 
-  private buildISA(delimiter: string, segmentTerminator: string, date: Date, controlNumber: string): string {
-    return `ISA${delimiter}00${delimiter}          ${delimiter}00${delimiter}          ${delimiter}ZZ${delimiter}SUBMITTERID    ${delimiter}ZZ${delimiter}RECEIVERID     ${delimiter}${this.formatDate(date)}${delimiter}${this.formatTime(date)}${delimiter}U${delimiter}00401${delimiter}${controlNumber}${delimiter}0${delimiter}P${delimiter}:${segmentTerminator}`;
+  private buildISA(delimiter: string, segmentTerminator: string, date: Date, controlNumber: string, formData: any): string {
+    // ISA06 - Interchange Sender ID (Submitter ID - typically Tax ID or other unique identifier)
+    const submitterId = (formData.submitter?.taxId || 'SUBMITTERID').padEnd(15).substring(0, 15);
+    
+    // ISA08 - Interchange Receiver ID (Payer ID)
+    const receiverId = (formData.insurance?.payerId || 'RECEIVERID').padEnd(15).substring(0, 15);
+    
+    return `ISA${delimiter}00${delimiter}          ${delimiter}00${delimiter}          ${delimiter}ZZ${delimiter}${submitterId}${delimiter}ZZ${delimiter}${receiverId}${delimiter}${this.formatDate(date)}${delimiter}${this.formatTime(date)}${delimiter}U${delimiter}00401${delimiter}${controlNumber}${delimiter}0${delimiter}P${delimiter}:${segmentTerminator}`;
   }
 
-  private buildGS835(delimiter: string, segmentTerminator: string, date: Date, controlNumber: string): string {
-    return `GS${delimiter}HP${delimiter}PAYERID${delimiter}RECEIVERID${delimiter}${this.formatDateYYYYMMDD(date)}${delimiter}${this.formatTime(date)}${delimiter}${controlNumber}${delimiter}X${delimiter}005010X221A1${segmentTerminator}`;
+  private buildGS835(delimiter: string, segmentTerminator: string, date: Date, controlNumber: string, formData: any): string {
+    // GS02 - Application Sender's Code (Submitter ID - can be NPI, Tax ID, or other)
+    const senderCode = formData.submitter?.npi || formData.submitter?.taxId || 'SENDERCODE';
+    
+    // GS03 - Application Receiver's Code (Payer ID or Receiver ID)
+    const receiverCode = formData.insurance?.payerId || formData.provider?.npi || 'RECEIVERCODE';
+    
+    return `GS${delimiter}HP${delimiter}${senderCode}${delimiter}${receiverCode}${delimiter}${this.formatDateYYYYMMDD(date)}${delimiter}${this.formatTime(date)}${delimiter}${controlNumber}${delimiter}X${delimiter}005010X221A1${segmentTerminator}`;
   }
 
   private buildST(delimiter: string, segmentTerminator: string, transactionType: string, controlNumber: string): string {
@@ -169,12 +194,19 @@ export class EdiGeneratorService {
   }
 
   private buildBPR(delimiter: string, segmentTerminator: string, formData: any): string {
-    // Calculate total payment from all claims
+    // Use manual check amount if provided, otherwise calculate from claims
     let totalPayment = 0;
-    if (formData.claims && formData.claims.length > 0) {
-      formData.claims.forEach((claim: any) => {
-        totalPayment += parseFloat(claim.payment || '0');
-      });
+    
+    if (formData.payment?.checkAmount && parseFloat(formData.payment.checkAmount) > 0) {
+      // Use manual override amount
+      totalPayment = parseFloat(formData.payment.checkAmount);
+    } else {
+      // Calculate total payment from all claims
+      if (formData.claims && formData.claims.length > 0) {
+        formData.claims.forEach((claim: any) => {
+          totalPayment += parseFloat(claim.payment || '0');
+        });
+      }
     }
 
     const handlingCode = 'C'; // Payment accompanies remittance
@@ -188,17 +220,61 @@ export class EdiGeneratorService {
     const accountNumber = '0000000000'; // Bank account number
     const payerId = formData.insurance?.payerId || 'PAYERID';
     const originatingCompanyId = '1234567890';
-    const checkIssueDate = this.formatDateYYYYMMDD(new Date());
+    
+    // Use form depositDate if provided, otherwise use current date
+    let checkIssueDate: string;
+    if (formData.payment?.depositDate) {
+      const depositDate = new Date(formData.payment.depositDate);
+      checkIssueDate = this.formatDateYYYYMMDD(depositDate);
+    } else {
+      checkIssueDate = this.formatDateYYYYMMDD(new Date());
+    }
 
     return `BPR${delimiter}I${delimiter}${paymentAmount}${delimiter}${creditDebit}${delimiter}${paymentMethod}${delimiter}${paymentFormat}${delimiter}${dfiIdQualifier}${delimiter}${dfiId}${delimiter}${accountNumberQualifier}${delimiter}${accountNumber}${delimiter}${payerId}${delimiter}${delimiter}${delimiter}${dfiIdQualifier}${delimiter}${dfiId}${delimiter}${accountNumberQualifier}${delimiter}${accountNumber}${delimiter}${checkIssueDate}${segmentTerminator}`;
   }
 
-  private buildTRN(delimiter: string, segmentTerminator: string): string {
+  private buildTRN(delimiter: string, segmentTerminator: string, formData: any): string {
     const traceType = '1'; // Current Transaction Trace Numbers
-    const checkNumber = this.generateControlNumber(12);
+    
+    // Use form checkNumber if provided, otherwise generate one
+    const checkNumber = formData.payment?.checkNumber || this.generateControlNumber(12);
     const originatingCompanyId = '1234567890';
     
     return `TRN${delimiter}${traceType}${delimiter}${checkNumber}${delimiter}${originatingCompanyId}${segmentTerminator}`;
+  }
+
+  private buildSubmitterLoop(delimiter: string, segmentTerminator: string, submitter: any): string {
+    let segments = '';
+    
+    // N1 - Submitter Name (1000A)
+    const submitterName = submitter?.name || 'SUBMITTER NAME';
+    segments += `N1${delimiter}41${delimiter}${submitterName}`;
+    
+    // Add NPI if provided
+    if (submitter?.npi) {
+      segments += `${delimiter}46${delimiter}${submitter.npi}`;
+    }
+    segments += `${segmentTerminator}\n`;
+    
+    // PER - Submitter Contact Information (optional but recommended)
+    if (submitter?.contactName || submitter?.phone || submitter?.email) {
+      const contactName = submitter?.contactName || 'CONTACT';
+      segments += `PER${delimiter}IC${delimiter}${contactName}`;
+      
+      // Add phone if provided
+      if (submitter?.phone) {
+        segments += `${delimiter}TE${delimiter}${submitter.phone}`;
+      }
+      
+      // Add email if provided
+      if (submitter?.email) {
+        segments += `${delimiter}EM${delimiter}${submitter.email}`;
+      }
+      
+      segments += `${segmentTerminator}\n`;
+    }
+    
+    return segments;
   }
 
   private buildN1Loop(delimiter: string, segmentTerminator: string, entityCode: string, data: any): string {
@@ -365,12 +441,12 @@ export class EdiGeneratorService {
     const segmentTerminator = this.detectSegmentTerminator(ediContent);
 
     if (!delimiter) {
-      errors.push('Could not detect element delimiter (* or | expected)');
+      errors.push('Could not detect element delimiter (*, ~, or | expected)');
       return { isValid: false, errors };
     }
 
     if (!segmentTerminator) {
-      errors.push('Could not detect segment terminator (~ expected)');
+      errors.push('Could not detect segment terminator (~ or _ expected)');
       return { isValid: false, errors };
     }
 
@@ -441,7 +517,9 @@ export class EdiGeneratorService {
     // No validation needed for line breaks
 
     // Validate segment terminator consistency
-    const terminatorCount = (ediContent.match(/~/g) || []).length;
+    const escapedTerminator = segmentTerminator.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const terminatorRegex = new RegExp(escapedTerminator, 'g');
+    const terminatorCount = (ediContent.match(terminatorRegex) || []).length;
     if (terminatorCount !== segments.length && terminatorCount !== segments.length + 1) {
       errors.push(`Inconsistent segment terminators. Found ${terminatorCount} terminators for ${segments.length} segments`);
     }
@@ -511,13 +589,41 @@ export class EdiGeneratorService {
   }
 
   private detectDelimiter(content: string): string | null {
+    // Check for common delimiters
+    // Priority: * (most common), then ~ (when _ is terminator), then | (rare)
     if (content.includes('*')) return '*';
+    
+    // If both ~ and _ are present, need to determine which is delimiter vs terminator
+    // Look at ISA segment structure to determine
+    if (content.includes('~') && content.includes('_')) {
+      // Check if ISA uses ~ as delimiter (more elements with ~)
+      const isaMatch = content.match(/ISA([~_])/);
+      if (isaMatch && isaMatch[1] === '~') {
+        return '~'; // ~ is the delimiter
+      }
+    }
+    
+    if (content.includes('~')) return '~';
     if (content.includes('|')) return '|';
     return null;
   }
 
   private detectSegmentTerminator(content: string): string | null {
+    // Check for common segment terminators
+    // Priority: ~ (most common), then _ (alternative - line break)
+    
+    // If both ~ and _ are present, need to determine which is delimiter vs terminator
+    if (content.includes('~') && content.includes('_')) {
+      // Check if ISA uses ~ as delimiter (then _ is terminator)
+      const isaMatch = content.match(/ISA([~_])/);
+      if (isaMatch && isaMatch[1] === '~') {
+        return '_'; // _ is the terminator
+      }
+      return '~'; // otherwise ~ is the terminator
+    }
+    
     if (content.includes('~')) return '~';
+    if (content.includes('_')) return '_';
     return null;
   }
 }

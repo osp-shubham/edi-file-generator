@@ -82,7 +82,7 @@ export class EdiVisualizerComponent {
     automaticLayout: true,
     fontSize: 13,
     wordWrap: 'on' as const,
-    scrollBeyondLastLine: false
+    scrollBeyondLastLine: false,
   });
 
   private parseTimeout: any;
@@ -95,11 +95,19 @@ export class EdiVisualizerComponent {
     effect(() => {
       const isDark = this.themeService.isDarkMode();
       const newTheme = isDark ? 'vs-dark' : 'vs';
-      this.editorTheme.set(newTheme);
-      this.editorOptions.set({
-        ...this.editorOptions(),
-        theme: newTheme
-      });
+      // Use setTimeout to defer signal writes and break the loop
+      setTimeout(() => {
+        this.editorTheme.set(newTheme);
+        this.editorOptions.set({
+          theme: newTheme,
+          language: 'plaintext',
+          minimap: { enabled: true },
+          automaticLayout: true,
+          fontSize: 13,
+          wordWrap: 'on' as const,
+          scrollBeyondLastLine: false,
+        });
+      }, 0);
     });
 
     // Auto-parse as user types (debounced)
@@ -203,8 +211,20 @@ export class EdiVisualizerComponent {
   }
 
   private detectSegmentTerminator(content: string): string {
-    // Common terminators: ~, \n, or specific character after ISA segment
+    // Common terminators: ~ (most common), _ (alternative - line break), \n
+    
+    // If both ~ and _ are present, check ISA to determine which is which
+    if (content.includes('~') && content.includes('_')) {
+      const isaMatch = content.match(/ISA([~_])/);
+      if (isaMatch && isaMatch[1] === '~') {
+        return '_'; // ~ is delimiter, _ is terminator
+      }
+      return '~'; // _ is delimiter, ~ is terminator
+    }
+    
     if (content.includes('~')) return '~';
+    if (content.includes('_')) return '_';
+    
     if (content.match(/ISA.{105}(.)/)) {
       const match = content.match(/ISA.{105}(.)/);
       return match ? match[1] : '~';
@@ -213,8 +233,9 @@ export class EdiVisualizerComponent {
   }
 
   private detectElementDelimiter(segment: string): string {
-    // Common delimiters: *, |, :
+    // Common delimiters: * (most common), ~ (alternative), |, :
     if (segment.includes('*')) return '*';
+    if (segment.includes('~')) return '~';
     if (segment.includes('|')) return '|';
     if (segment.includes(':')) return ':';
     return '*';
@@ -275,8 +296,17 @@ export class EdiVisualizerComponent {
         case 'BPR':
           // Financial Information - Check details
           summary.checkAmount = segment.elements[1];
-          summary.checkDate = segment.elements[15];
-          summary.checkNumber = segment.elements[6] || segment.elements[3];
+          // BPR segment element 16 contains the check issue date (YYYYMMDD format)
+          summary.checkDate = this.formatDate(segment.elements[16]);
+          break;
+
+        case 'TRN':
+          // Reassociation Trace Number - Contains check number
+          // TRN*1*CheckNumber*OriginatingCompanyId
+          // Element 0 = traceType (1), Element 1 = checkNumber, Element 2 = originatingCompanyId
+          if (segment.elements[1]) {
+            summary.checkNumber = segment.elements[1];
+          }
           break;
 
         case 'N1':
